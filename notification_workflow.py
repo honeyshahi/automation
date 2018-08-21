@@ -7,16 +7,17 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 import smtplib
+import emailhtmltemplate
+import emailhtmltemplate2
 
 VIEW_NOTIFICATION_REASON_MAP = {
     'scenario1': 'Not activated',
     'scenario2': 'Not used'
 }
-EMAIL_HOST = ''
-EMAIL_HOST_USER = ''
-EMAIL_HOST_PASSWORD = ''
-EMAIL_PORT =
-
+EMAIL_HOST = 'email-smtp.us-east-1.amazonaws.com'
+EMAIL_HOST_USER = 'AKIAJTFDDSQQC55IAXUA'
+EMAIL_HOST_PASSWORD = 'Aj/kTq8YAcqinnJvXxlurqFywVoM9QbTw1tyThFMKfwa'
+EMAIL_PORT = 587
 
 class Notify(object):
     def __init__(self, host, database, user, password, port=5432):
@@ -36,43 +37,48 @@ class Notify(object):
 
     def notify_users_in_view(self, view, from_addr):
         cursor = self.pg_connection.cursor()
-        from emailhtmltemplate import html_temp
         # Get user record from view
         users = pd.read_sql(
             'select * from {}'.format(view),
             self.pg_connection).to_dict(orient="records")
 
-        # msg['From'] = config.EMAIL_ADDRESS
+	# msg['From'] = config.EMAIL_ADDRESS
         # msg['To'] = to
         for user in users:
-            html_temp(user['userid'])
+            msg = MIMEMultipart('alternative')
+	    if view == 'scenario1':
+	        emailhtmltemplate. html_temp(user['userid'])
+		msg['Subject'] = emailhtmltemplate.html_temp.subject
+		body = emailhtmltemplate.html_temp.msg
+	    elif view == 'scenario2':
+		emailhtmltemplate2.html_temp(user['userid'])
+		msg['Subject'] = emailhtmltemplate2.html_temp.subject
+		body = emailhtmltemplate2.html_temp.msg
             html = """\
             <html>
                 <head>
                     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
                 </head>
                 <body>
-                    """ + html_temp.msg + """
+                    """ + body + """
                  </body>
              </html>"""
 
             part = MIMEText(html, 'html')
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = html_temp.subject
             msg.attach(part)
 
             # message='Subject:{} {}'.format(subject,msg)
             try:
-                # self.email_server.sendmail(
-                #     from_addr=from_addr,
-                #     to_addrs=user['assigned_email'],
-                #     msg=msg.as_string())
+                self.email_server.sendmail(
+                    from_addr=from_addr,
+                    to_addrs=user['assigned_email'],
+                    msg=msg.as_string())
 
                 # Update notification status and date
                 query = "UPDATE master " \
                         "SET notification_date='{}', notification_status='{}', notification_reason='{}' " \
                         "WHERE key_name='{}'".format(datetime.datetime.now(), 'YES',
-                                                   VIEW_NOTIFICATION_REASON_MAP[view], user['key_name'])
+                                                     VIEW_NOTIFICATION_REASON_MAP[view], user['key_name'])
                 # import pdb
                 # pdb.set_trace()
                 cursor.execute(query)
@@ -80,7 +86,7 @@ class Notify(object):
             except Exception as e:
                 print "Could not send email notification to {}".format(
                     user['assigned_email'])
-                print e.message
+                print e
         cursor.close()
 
 
